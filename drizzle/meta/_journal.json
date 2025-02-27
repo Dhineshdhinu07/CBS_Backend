@@ -1,0 +1,34 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1740238657845,
+      "tag": "0000_minor_komodo",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1740255494737,
+      "tag": "0001_ordinary_mercury",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1740467361324,
+      "tag": "0002_real_kid_colt",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1740659380704,
+      "tag": "0003_yummy_lorna_dane",
+      "breakpoints": true
+    }
+  ]
+}
