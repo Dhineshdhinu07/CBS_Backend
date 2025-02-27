@@ -1,14 +1,20 @@
 import { sqliteTable, text, real, integer, blob } from 'drizzle-orm/sqlite-core';
+import { sql } from 'drizzle-orm';
 
 // Users table schema
 export const users = sqliteTable('users', {
   id: text('id').primaryKey(),
   email: text('email').notNull().unique(),
   password: text('password').notNull(),
+  role: text('role', { enum: ['user', 'admin'] }).default('user').notNull(),
   name: text('name').notNull(),
   phoneNumber: text('phone_number'),
-  createdAt: text('created_at').notNull().default('CURRENT_TIMESTAMP'),
-  updatedAt: text('updated_at').notNull().default('CURRENT_TIMESTAMP')
+  createdAt: integer('created_at', { mode: 'timestamp' })
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: integer('updated_at', { mode: 'timestamp' })
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
 });
 
 // Payments table schema
@@ -29,17 +35,17 @@ export const payments = sqliteTable('payments', {
 export const bookings = sqliteTable('bookings', {
   id: text('id').primaryKey(),
   userId: text('user_id').notNull().references(() => users.id),
-  orderId: text('order_id').notNull().unique().references(() => payments.orderId),
-  consultationDate: text('consultation_date').notNull(),
-  name: text('name').notNull(),
-  email: text('email').notNull(),
-  phoneNumber: text('phone_number').notNull(),
-  files: blob('files'),
-  amount: real('amount').notNull(),
-  isGuest: integer('is_guest', { mode: 'boolean' }).notNull().default(false),
-  status: text('status').notNull().default('PENDING'),
-  createdAt: text('created_at').notNull().default('CURRENT_TIMESTAMP'),
-  updatedAt: text('updated_at').notNull().default('CURRENT_TIMESTAMP')
+  date: integer('date', { mode: 'timestamp' }).notNull(),
+  status: text('status', { enum: ['pending', 'confirmed', 'cancelled'] }).default('pending').notNull(),
+  paymentStatus: text('payment_status', { enum: ['pending', 'completed', 'failed'] }).default('pending').notNull(),
+  paymentId: text('payment_id'),
+  meetLink: text('meet_link'),
+  createdAt: integer('created_at', { mode: 'timestamp' })
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: integer('updated_at', { mode: 'timestamp' })
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
 });
 
 // Export types

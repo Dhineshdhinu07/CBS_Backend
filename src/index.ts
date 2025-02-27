@@ -1,5 +1,6 @@
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
+import { HTTPException } from 'hono/http-exception'
 import { register, login, getProfile, updateProfile } from './controllers/auth'
 import { authMiddleware } from './middleware/auth'
 import { users } from './db/schema'
@@ -21,6 +22,7 @@ interface Env {
   ZOHO_CLIENT_ID: string;
   ZOHO_CLIENT_SECRET: string;
   ZOHO_REFRESH_TOKEN: string;
+  FRONTEND_URL?: string;
 }
 
 // Define custom variables
@@ -32,14 +34,16 @@ interface Variables {
 const app = new Hono<{ Bindings: Env; Variables: Variables }>()
 
 // Add CORS middleware
-app.use('*', cors({
-  origin: ['http://localhost:3000', 'http://localhost:5173', 'http://127.0.0.1:5173', 'http://127.0.0.1:3000'],
-  allowMethods: ['POST', 'GET', 'OPTIONS', 'PUT', 'DELETE', 'PATCH'],
-  allowHeaders: ['Content-Type', 'Authorization', 'x-webhook-signature'],
-  exposeHeaders: ['Content-Length', 'Content-Type'],
-  credentials: true,
-  maxAge: 600,
-}))
+app.use('*', async (c, next) => {
+  return cors({
+    origin: c.env.FRONTEND_URL || '*',
+    credentials: true,
+    allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+    allowHeaders: ['Content-Type', 'Authorization'],
+    exposeHeaders: ['Content-Length', 'X-Kuma-Revision'],
+    maxAge: 600,
+  })(c, next)
+})
 
 // Initialize services
 app.use('*', async (c, next) => {
@@ -83,5 +87,24 @@ app.patch('/user/profile', updateProfile)
 app.route('/', paymentController)
 app.route('/', bookingController)
 // app.route('/', meetingController)
+
+// Error handling middleware
+app.onError((err, c) => {
+  if (err instanceof HTTPException) {
+    return c.json({
+      success: false,
+      message: err.message
+    }, err.status);
+  }
+
+  console.error('Unhandled error:', err);
+  return c.json({
+    success: false,
+    message: 'Internal server error'
+  }, 500);
+});
+
+// Health check endpoint
+app.get('/', (c) => c.json({ status: 'ok' }));
 
 export default app
