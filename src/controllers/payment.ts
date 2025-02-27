@@ -150,15 +150,15 @@ app.get('/payment-status/:orderId', async (c) => {
     if (paymentData.order_status === 'PAID') {
       const [booking] = await db.select()
         .from(bookings)
-        .where(eq(bookings.orderId, orderId))
+        .where(eq(bookings.paymentId, orderId))
 
       if (booking) {
         await db.update(bookings)
           .set({ 
-            status: 'Confirmed',
-            updatedAt: new Date().toISOString()
+            status: 'confirmed',
+            updatedAt: new Date()
           })
-          .where(eq(bookings.orderId, orderId))
+          .where(eq(bookings.paymentId, orderId))
       }
     }
 
@@ -258,15 +258,15 @@ app.post('/verify', async (c) => {
     if (paymentData.order_status === 'PAID') {
       const [booking] = await db.select()
         .from(bookings)
-        .where(eq(bookings.orderId, body.orderId))
+        .where(eq(bookings.paymentId, body.orderId))
 
       if (booking) {
         await db.update(bookings)
           .set({ 
-            status: 'Confirmed',
-            updatedAt: new Date().toISOString()
+            status: 'confirmed',
+            updatedAt: new Date()
           })
-          .where(eq(bookings.orderId, body.orderId))
+          .where(eq(bookings.paymentId, body.orderId))
       }
     }
 
@@ -341,15 +341,15 @@ app.post('/webhook', async (c) => {
       if (orderStatus === 'PAID') {
         const [booking] = await db.select()
           .from(bookings)
-          .where(eq(bookings.orderId, orderId))
+          .where(eq(bookings.paymentId, orderId))
 
         if (booking) {
           await db.update(bookings)
             .set({ 
-              status: 'Confirmed',
-              updatedAt: new Date().toISOString()
+              status: 'confirmed',
+              updatedAt: new Date()
             })
-            .where(eq(bookings.orderId, orderId))
+            .where(eq(bookings.paymentId, orderId))
         }
       }
 

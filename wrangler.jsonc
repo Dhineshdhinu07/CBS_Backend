@@ -15,13 +15,8 @@
     }
   ],
   "vars": {
-    "JWT_SECRET": "",
     "NODE_ENV": "development",
-    "CASHFREE_CLIENT_ID": "",
-    "CASHFREE_CLIENT_SECRET": "",
     "CASHFREE_API_VERSION": "2022-09-01",
-    "ZOHO_CLIENT_ID": "",
-    "ZOHO_CLIENT_SECRET": "",
-    "ZOHO_REFRESH_TOKEN": ""
+    "FRONTEND_URL": "http://localhost:3000"
   }
 } 

@@ -34,16 +34,17 @@ interface Variables {
 const app = new Hono<{ Bindings: Env; Variables: Variables }>()
 
 // Add CORS middleware
-app.use('*', async (c, next) => {
-  return cors({
-    origin: c.env.FRONTEND_URL || '*',
-    credentials: true,
-    allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-    allowHeaders: ['Content-Type', 'Authorization'],
-    exposeHeaders: ['Content-Length', 'X-Kuma-Revision'],
-    maxAge: 600,
-  })(c, next)
-})
+app.use('*', cors({
+  origin: (origin, ctx) => {
+    return ctx.env.FRONTEND_URL || 'http://localhost:3000';
+  },
+  credentials: true,
+  allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowHeaders: ['Content-Type', 'Authorization'],
+  exposeHeaders: ['Content-Length', 'X-Kuma-Revision'],
+  maxAge: 600,
+}))
+
 
 // Initialize services
 app.use('*', async (c, next) => {
