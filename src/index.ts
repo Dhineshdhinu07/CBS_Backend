@@ -70,11 +70,17 @@ app.use('*', async (c, next) => {
   await next()
 })
 
-// Mount routers
-app.route('/auth', authRouter)
-app.route('/bookings', bookingsRouter)
-app.route('/payments', paymentRouter)
-app.route('/admin', adminRouter)
+// Create API router
+const api = new Hono<{ Bindings: Env; Variables: Variables }>();
+
+// Mount routers under /api
+api.route('/auth', authRouter);
+api.route('/bookings', bookingsRouter);
+api.route('/payments', paymentRouter);
+api.route('/admin', adminRouter);
+
+// Mount API routes
+app.route('/api', api);
 
 // Error handling middleware
 app.onError((err, c) => {

@@ -29,7 +29,17 @@ bookingsRouter.post('/', zValidator('json', bookingSchema), async (c) => {
     const { date: dateString } = c.req.valid('json');
     const db = createDbClient(c.env.DB);
 
+    console.log('Received booking request:', {
+      user: { id: user.id, email: user.email },
+      date: dateString
+    });
+
     const date = new Date(dateString);
+    if (isNaN(date.getTime())) {
+      console.error('Invalid date format:', dateString);
+      throw new HTTPException(400, { message: 'Invalid date format' });
+    }
+
     console.log('Creating booking for user:', user.id, 'date:', date.toISOString());
 
     // Check for existing booking at the same time
@@ -41,12 +51,20 @@ bookingsRouter.post('/', zValidator('json', bookingSchema), async (c) => {
     });
 
     if (existingBooking) {
+      console.log('Duplicate booking found:', existingBooking);
       throw new HTTPException(400, { message: 'You already have a booking at this time' });
     }
 
     // Create the booking
     const bookingId = nanoid();
     const orderId = `ORDER_${nanoid(8)}`;
+
+    console.log('Creating new booking:', {
+      bookingId,
+      orderId,
+      userId: user.id,
+      date: date.toISOString()
+    });
 
     const [booking] = await db.insert(bookings).values({
       id: bookingId,
@@ -56,6 +74,8 @@ bookingsRouter.post('/', zValidator('json', bookingSchema), async (c) => {
       paymentStatus: 'pending',
       paymentId: orderId
     }).returning();
+
+    console.log('Booking created in database:', booking);
 
     // Create payment record
     const amount = 500; // Set your consultation fee
@@ -72,6 +92,7 @@ bookingsRouter.post('/', zValidator('json', bookingSchema), async (c) => {
       updatedAt: new Date().toISOString()
     };
 
+    console.log('Creating payment record:', paymentRecord);
     await db.insert(payments).values(paymentRecord);
 
     // Create Cashfree payment session
@@ -93,7 +114,9 @@ bookingsRouter.post('/', zValidator('json', bookingSchema), async (c) => {
       order_note: 'Consultation booking'
     };
 
+    console.log('Creating Cashfree payment session:', paymentRequest);
     const paymentSession = await cashfree.createOrder(paymentRequest);
+    console.log('Cashfree payment session created:', paymentSession);
 
     // Update payment record with session ID
     await db.update(payments)
@@ -103,7 +126,11 @@ bookingsRouter.post('/', zValidator('json', bookingSchema), async (c) => {
       })
       .where(eq(payments.orderId, orderId));
 
-    console.log('Booking created:', booking.id, 'with payment session:', paymentSession.payment_session_id);
+    console.log('Booking process completed successfully:', {
+      bookingId,
+      orderId,
+      paymentSessionId: paymentSession.payment_session_id
+    });
 
     return c.json({
       success: true,
@@ -118,9 +145,16 @@ bookingsRouter.post('/', zValidator('json', bookingSchema), async (c) => {
   } catch (error) {
     console.error('Create booking error:', error);
     if (error instanceof HTTPException) {
-      throw error;
+      return c.json({
+        success: false,
+        message: error.message
+      }, error.status);
     }
-    throw new HTTPException(500, { message: 'Failed to create booking' });
+    return c.json({
+      success: false,
+      message: 'Failed to create booking',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    }, 500);
   }
 });
 

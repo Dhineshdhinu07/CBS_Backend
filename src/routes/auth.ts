@@ -43,7 +43,8 @@ auth.post('/login', zValidator('json', loginSchema), async (c) => {
     const token = await generateToken({
       id: user.id,
       email: user.email,
-      role: user.role as 'user' | 'admin'
+      role: user.role as 'user' | 'admin',
+      name: user.name
     }, c.env.JWT_SECRET);
 
     console.log('Generated token for user:', user.id);
@@ -116,7 +117,8 @@ auth.post('/register', zValidator('json', registerSchema), async (c) => {
     const token = await generateToken({
       id: user.id,
       email: user.email,
-      role: user.role as 'user' | 'admin'
+      role: user.role as 'user' | 'admin',
+      name: user.name
     }, c.env.JWT_SECRET);
 
     // Set JWT in httpOnly cookie with updated settings

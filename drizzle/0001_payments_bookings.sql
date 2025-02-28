@@ -20,17 +20,12 @@ CREATE TABLE IF NOT EXISTS payments (
 CREATE TABLE IF NOT EXISTS bookings (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL,
-  order_id TEXT NOT NULL UNIQUE,
-  consultation_date TEXT NOT NULL,
-  name TEXT NOT NULL,
-  email TEXT NOT NULL,
-  phone_number TEXT NOT NULL,
-  files BLOB,
-  amount REAL NOT NULL,
-  is_guest INTEGER NOT NULL DEFAULT 0,
-  status TEXT NOT NULL DEFAULT 'PENDING',
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (user_id) REFERENCES users(id),
-  FOREIGN KEY (order_id) REFERENCES payments(order_id)
+  date INTEGER NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending',
+  payment_status TEXT NOT NULL DEFAULT 'pending',
+  payment_id TEXT,
+  meet_link TEXT,
+  created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+  updated_at INTEGER NOT NULL DEFAULT (unixepoch()),
+  FOREIGN KEY (user_id) REFERENCES users(id)
 ); 
