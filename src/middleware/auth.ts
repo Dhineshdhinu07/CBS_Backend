@@ -1,6 +1,6 @@
-import { Context } from 'hono'
-import { HTTPException } from 'hono/http-exception'
-import * as jose from 'jose'
+import { Context, Next } from 'hono'
+import { getCookie } from 'hono/cookie'
+import { sign, verify } from '../utils/jwt'
 import { drizzle } from 'drizzle-orm/d1'
 import { users, User } from '../db/schema'
 import { eq } from 'drizzle-orm'
@@ -10,85 +10,108 @@ interface Env {
   JWT_SECRET: string;
 }
 
+export type AuthUser = User;
+
 interface Variables {
-  user: User;
+  user: AuthUser;
 }
 
-export interface AuthUser {
+export const generateToken = async (payload: {
   id: string;
   email: string;
   role: 'user' | 'admin';
-  name?: string;
-  phoneNumber?: string;
-}
+}, secret: string): Promise<string> => {
+  return sign({
+    userId: payload.id,
+    email: payload.email,
+    role: payload.role
+  }, secret);
+};
 
-export async function generateToken(user: AuthUser, secret: string): Promise<string> {
+export const authMiddleware = async (
+  c: Context<{ Bindings: Env; Variables: Variables }>,
+  next: Next
+) => {
   try {
-    const jwt = await new jose.SignJWT({ 
-      id: user.id,
-      email: user.email,
-      role: user.role 
-    })
-      .setProtectedHeader({ alg: 'HS256' })
-      .setIssuedAt()
-      .setExpirationTime('24h')
-      .sign(new TextEncoder().encode(secret));
-    
-    return jwt;
-  } catch (error) {
-    console.error('Token generation error:', error);
-    throw new HTTPException(500, { message: 'Failed to generate token' });
-  }
-}
-
-export async function verifyToken(token: string, secret: string): Promise<AuthUser> {
-  try {
-    const { payload } = await jose.jwtVerify(token, new TextEncoder().encode(secret));
-    return {
-      id: payload.id as string,
-      email: payload.email as string,
-      role: payload.role as 'user' | 'admin'
-    };
-  } catch (error) {
-    console.error('Token verification error:', error);
-    throw new HTTPException(401, { message: 'Invalid token' });
-  }
-}
-
-export async function authMiddleware(c: Context<{ Bindings: Env; Variables: Variables }>, next: () => Promise<void>) {
-  try {
-    const authHeader = c.req.header('Cookie');
-    if (!authHeader) {
-      throw new HTTPException(401, { message: 'No token provided' });
-    }
-
-    const cookies = authHeader.split(';').reduce((acc, cookie) => {
-      const [key, value] = cookie.trim().split('=');
-      acc[key] = value;
-      return acc;
-    }, {} as Record<string, string>);
-
-    const token = cookies['auth_token'];
+    // Get the token from cookie or Authorization header
+    let token = getCookie(c, 'auth_token');
     if (!token) {
-      throw new HTTPException(401, { message: 'No token provided' });
+      const authHeader = c.req.header('Authorization');
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        token = authHeader.substring(7);
+      }
     }
 
-    const user = await verifyToken(token, c.env.JWT_SECRET);
-    console.log('Authenticated user:', user);
-    c.set('user', user);
-    await next();
-  } catch (error) {
-    console.error('Auth middleware error:', error);
-    throw new HTTPException(401, { message: 'Invalid token' });
-  }
-}
+    console.log('Auth token:', token ? 'Present' : 'Not present');
+    
+    if (!token) {
+      return c.json({ 
+        success: false, 
+        message: 'No authentication token provided' 
+      }, 401);
+    }
 
-export async function adminMiddleware(c: Context, next: () => Promise<void>) {
-  const user = c.get('user') as AuthUser
+    try {
+      // Verify the token
+      const decoded = await verify(token, c.env.JWT_SECRET);
+      console.log('Token decoded:', decoded);
+      
+      if (!decoded || !decoded.userId) {
+        return c.json({ 
+          success: false, 
+          message: 'Invalid token format' 
+        }, 401);
+      }
+
+      // Get user from database
+      const db = drizzle(c.env.DB);
+      const [user] = await db.select()
+        .from(users)
+        .where(eq(users.id, decoded.userId));
+      
+      if (!user) {
+        return c.json({ 
+          success: false, 
+          message: 'User not found' 
+        }, 401);
+      }
+
+      // Set user in context
+      c.set('user', user);
+      
+      // Continue to next middleware/route handler
+      await next();
+    } catch (error) {
+      console.error('Token verification error:', error);
+      return c.json({ 
+        success: false, 
+        message: 'Invalid or expired token',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      }, 401);
+    }
+  } catch (error) {
+    console.error('Authentication middleware error:', error);
+    return c.json({ 
+      success: false, 
+      message: 'Authentication failed',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    }, 500);
+  }
+};
+
+// Admin middleware
+export const adminMiddleware = async (
+  c: Context<{ Bindings: Env; Variables: Variables }>,
+  next: Next
+) => {
+  const user = c.get('user');
   
   if (user.role !== 'admin') {
-    throw new HTTPException(403, { message: 'Admin access required' })
+    return c.json({
+      success: false,
+      message: 'Admin access required'
+    }, 403);
   }
-
-  await next()
-}
+  
+  await next();
+};

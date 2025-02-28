@@ -165,7 +165,7 @@ bookingsRouter.get('/my', async (c) => {
   }
 });
 
-// Update a booking
+// Edit a booking
 bookingsRouter.patch('/:id', zValidator('json', updateBookingSchema), async (c) => {
   try {
     const user = c.get('user');
@@ -175,21 +175,22 @@ bookingsRouter.patch('/:id', zValidator('json', updateBookingSchema), async (c) 
 
     console.log('Updating booking:', bookingId, 'for user:', user.id);
 
+    // Check if booking exists and user has permission
     const [existingBooking] = await db.query.bookings.findMany({
       where: and(
         eq(bookings.id, bookingId),
-        eq(bookings.userId, user.id)
+        user.role === 'admin' ? undefined : eq(bookings.userId, user.id)
       )
     });
 
     if (!existingBooking) {
-      throw new HTTPException(404, { message: 'Booking not found' });
+      throw new HTTPException(404, { message: 'Booking not found or unauthorized' });
     }
 
     const updateData = {
+      ...(updates.date && { date: new Date(updates.date) }),
       ...(updates.status && { status: updates.status }),
       ...(updates.paymentStatus && { paymentStatus: updates.paymentStatus }),
-      ...(updates.date && { date: new Date(updates.date) }),
       updatedAt: new Date()
     };
 
@@ -223,15 +224,16 @@ bookingsRouter.delete('/:id', async (c) => {
 
     console.log('Deleting booking:', bookingId, 'for user:', user.id);
 
+    // Check if booking exists and user has permission
     const [existingBooking] = await db.query.bookings.findMany({
       where: and(
         eq(bookings.id, bookingId),
-        eq(bookings.userId, user.id)
+        user.role === 'admin' ? undefined : eq(bookings.userId, user.id)
       )
     });
 
     if (!existingBooking) {
-      throw new HTTPException(404, { message: 'Booking not found' });
+      throw new HTTPException(404, { message: 'Booking not found or unauthorized' });
     }
 
     await db.delete(bookings).where(eq(bookings.id, bookingId));

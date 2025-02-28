@@ -31,7 +31,7 @@ A secure Hono backend for a consultation booking system using Drizzle ORM with C
 
 2. Install dependencies:
    ```bash
-   npm install
+npm install
    ```
 
 3. Create a `.dev.vars` file with the following environment variables:
@@ -80,7 +80,7 @@ A secure Hono backend for a consultation booking system using Drizzle ORM with C
 
 1. Start development server:
    ```bash
-   npm run dev
+npm run dev
    # or
    wrangler dev
    ```

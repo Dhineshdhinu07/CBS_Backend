@@ -16,7 +16,7 @@ export const bookingSchema = z.object({
   date: z.coerce.date()
     .refine((date) => {
       const now = new Date();
-      return date > now;
+      return date.getTime() > now.getTime();
     }, { message: "Booking date must be in the future" })
 });
 
@@ -24,7 +24,7 @@ export const updateBookingSchema = z.object({
   date: z.coerce.date()
     .refine((date) => {
       const now = new Date();
-      return date > now;
+      return date.getTime() > now.getTime();
     }, { message: "Booking date must be in the future" })
     .optional(),
   status: z.enum(['pending', 'confirmed', 'cancelled']).optional(),

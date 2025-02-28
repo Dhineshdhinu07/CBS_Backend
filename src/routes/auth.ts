@@ -8,6 +8,7 @@ import { eq } from 'drizzle-orm';
 import { users } from '../db/schema';
 import { createDbClient } from '../db';
 import { nanoid } from 'nanoid';
+import { setCookie } from 'hono/cookie';
 
 interface Env {
   DB: D1Database;
@@ -45,16 +46,26 @@ auth.post('/login', zValidator('json', loginSchema), async (c) => {
       role: user.role as 'user' | 'admin'
     }, c.env.JWT_SECRET);
 
+    console.log('Generated token for user:', user.id);
+
     // Set JWT in httpOnly cookie
-    c.header('Set-Cookie', `auth_token=${token}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=${60 * 60 * 24}`);
+    setCookie(c, 'auth_token', token, {
+      httpOnly: true,
+      secure: false, // Set to false for local development
+      sameSite: 'Lax',
+      path: '/',
+      maxAge: 60 * 60 * 24 // 24 hours
+    });
 
     console.log('Login successful for:', email);
     return c.json({
       success: true,
+      token, // Include token in response for client-side storage
       user: {
         id: user.id,
         email: user.email,
-        role: user.role
+        role: user.role,
+        name: user.name
       }
     });
   } catch (error) {
@@ -108,8 +119,14 @@ auth.post('/register', zValidator('json', registerSchema), async (c) => {
       role: user.role as 'user' | 'admin'
     }, c.env.JWT_SECRET);
 
-    // Set JWT in httpOnly cookie
-    c.header('Set-Cookie', `auth_token=${token}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=${60 * 60 * 24}`);
+    // Set JWT in httpOnly cookie with updated settings
+    setCookie(c, 'auth_token', token, {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'None',
+      path: '/',
+      maxAge: 60 * 60 * 24 // 24 hours
+    });
 
     console.log('Registration successful for:', email);
     return c.json({
@@ -141,6 +158,28 @@ auth.get('/me', authMiddleware, async (c) => {
   } catch (error) {
     console.error('Get user info error:', error);
     throw new HTTPException(500, { message: 'Failed to get user info' });
+  }
+});
+
+// Logout route
+auth.post('/logout', async (c) => {
+  try {
+    // Clear the auth cookie with updated settings
+    setCookie(c, 'auth_token', '', {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'None',
+      path: '/',
+      maxAge: 0 // Expire immediately
+    });
+
+    return c.json({
+      success: true,
+      message: 'Logged out successfully'
+    });
+  } catch (error) {
+    console.error('Logout error:', error);
+    throw new HTTPException(500, { message: 'Failed to logout' });
   }
 });
 

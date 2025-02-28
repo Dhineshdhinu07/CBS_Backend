@@ -1,15 +1,17 @@
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { HTTPException } from 'hono/http-exception'
-import { register, login, getProfile, updateProfile } from './controllers/auth'
 import { authMiddleware } from './middleware/auth'
 import { users } from './db/schema'
 import { createCashfreeService } from './services/cashfree'
 import { createZohoService } from './services/zoho'
 
-// // Import controllers
-import paymentController from './controllers/payment'
-import bookingController from './controllers/booking'
+// Import routers
+import authRouter from './routes/auth'
+import bookingsRouter from './routes/bookings'
+import paymentRouter from './routes/payment'
+import adminRouter from './routes/admin'
+
 // Define environment bindings
 interface Env {
   DB: D1Database;
@@ -33,18 +35,15 @@ interface Variables {
 // Create app with proper types
 const app = new Hono<{ Bindings: Env; Variables: Variables }>()
 
-// Add CORS middleware
+// Add CORS middleware with more permissive settings
 app.use('*', cors({
-  origin: (origin, ctx) => {
-    return ctx.env.FRONTEND_URL || 'http://localhost:3000';
-  },
-  credentials: true,
+  origin: ['http://localhost:3000'],
   allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-  allowHeaders: ['Content-Type', 'Authorization'],
-  exposeHeaders: ['Content-Length', 'X-Kuma-Revision'],
-  maxAge: 600,
+  allowHeaders: ['Content-Type', 'Authorization', 'Cookie'],
+  exposeHeaders: ['Set-Cookie', 'Content-Length', 'X-Kuma-Revision'],
+  credentials: true,
+  maxAge: 86400
 }))
-
 
 // Initialize services
 app.use('*', async (c, next) => {
@@ -71,23 +70,11 @@ app.use('*', async (c, next) => {
   await next()
 })
 
-// Authentication routes
-app.post('/auth/register', register)
-app.post('/auth/login', login)
-
-// Protected routes
-app.use('/user/*', authMiddleware)
-app.use('/meetings/*', authMiddleware)
-app.use('/bookings/*', authMiddleware)
-
-// User profile routes
-app.get('/user/profile', getProfile)
-app.patch('/user/profile', updateProfile)
-
-// Payment, booking, and meeting routes
-app.route('/', paymentController)
-app.route('/', bookingController)
-// app.route('/', meetingController)
+// Mount routers
+app.route('/auth', authRouter)
+app.route('/bookings', bookingsRouter)
+app.route('/payments', paymentRouter)
+app.route('/admin', adminRouter)
 
 // Error handling middleware
 app.onError((err, c) => {

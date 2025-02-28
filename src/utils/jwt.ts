@@ -1,7 +1,11 @@
+import { SignJWT, jwtVerify } from 'jose';
+import { TextEncoder } from 'util';
+
 // JWT implementation using Web Crypto API
 interface JWTPayload {
   userId: string;
   email: string;
+  role: string;
   iat?: number;
   exp?: number;
 }
@@ -55,74 +59,22 @@ const generateKey = async (secret: string): Promise<CryptoKey> => {
 };
 
 export const sign = async (payload: Omit<JWTPayload, 'iat' | 'exp'>, secret: string): Promise<string> => {
-  const header: JWTHeader = {
-    alg: 'HS256',
-    typ: 'JWT'
-  };
+  const iat = Math.floor(Date.now() / 1000);
+  const exp = iat + 24 * 60 * 60; // 24 hours
 
-  const now = Math.floor(Date.now() / 1000);
-  const fullPayload: JWTPayload = {
-    ...payload,
-    iat: now,
-    exp: now + (24 * 60 * 60) // 24 hours
-  };
-
-  const stringifiedHeader = JSON.stringify(header);
-  const stringifiedPayload = JSON.stringify(fullPayload);
-
-  const encodedHeader = base64UrlEncode(stringifiedHeader);
-  const encodedPayload = base64UrlEncode(stringifiedPayload);
-
-  const key = await generateKey(secret);
-  const signature = await crypto.subtle.sign(
-    'HMAC',
-    key,
-    utf8ToUint8Array(`${encodedHeader}.${encodedPayload}`)
-  );
-
-  const signatureBytes = new Uint8Array(signature);
-  const signatureBase64 = btoa(String.fromCharCode(...signatureBytes));
-  const encodedSignature = signatureBase64
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=/g, '');
-
-  return `${encodedHeader}.${encodedPayload}.${encodedSignature}`;
+  const secretKey = new TextEncoder().encode(secret);
+  
+  return new SignJWT({ ...payload })
+    .setProtectedHeader({ alg: 'HS256' })
+    .setIssuedAt(iat)
+    .setExpirationTime(exp)
+    .sign(secretKey);
 };
 
 export const verify = async (token: string, secret: string): Promise<JWTPayload> => {
-  const [headerB64, payloadB64, signatureB64] = token.split('.');
-
-  if (!headerB64 || !payloadB64 || !signatureB64) {
-    throw new Error('Invalid token format');
-  }
-
-  const key = await generateKey(secret);
-  const signature = await crypto.subtle.sign(
-    'HMAC',
-    key,
-    utf8ToUint8Array(`${headerB64}.${payloadB64}`)
-  );
-
-  const signatureBytes = new Uint8Array(signature);
-  const signatureBase64 = btoa(String.fromCharCode(...signatureBytes));
-  const expectedSignature = signatureBase64
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=/g, '');
-
-  if (signatureB64 !== expectedSignature) {
-    throw new Error('Invalid signature');
-  }
-
-  const payload = JSON.parse(base64UrlDecode(payloadB64)) as JWTPayload;
-  const now = Math.floor(Date.now() / 1000);
-
-  if (payload.exp && payload.exp < now) {
-    throw new Error('Token expired');
-  }
-
-  return payload;
+  const secretKey = new TextEncoder().encode(secret);
+  const { payload } = await jwtVerify(token, secretKey);
+  return payload as JWTPayload;
 };
 
 export const generateToken = sign;

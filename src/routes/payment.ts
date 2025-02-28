@@ -1,8 +1,9 @@
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
-import { payments } from '../db/schema';
+import { payments, bookings } from '../db/schema';
 import { createDbClient } from '../db';
 import { nanoid } from 'nanoid';
+import { eq } from 'drizzle-orm';
 
 interface Env {
   DB: D1Database;
@@ -43,8 +44,8 @@ paymentRouter.post('/', async (c) => {
         customer_phone: customerPhone,
       },
       order_meta: {
-        return_url: `${c.req.url.split('/payment')[0]}/payment-status/${body.order_id}`,
-        notify_url: `${c.req.url.split('/payment')[0]}/payment/webhook`,
+        return_url: `${frontendUrl}/payment-status/${body.order_id}`,
+        notify_url: `${c.req.url.split('/payment')[0]}/payments/webhook`,
         ...body.order_meta
       },
       order_note: 'Consultation booking',
@@ -89,5 +90,94 @@ paymentRouter.post('/', async (c) => {
     }, 500);
   }
 });
+
+// Verify payment status - GET endpoint
+paymentRouter.get('/verify/:orderId', async (c) => {
+  try {
+    const orderId = c.req.param('orderId');
+    return await verifyPayment(c, orderId);
+  } catch (error) {
+    console.error('Payment verification error:', error);
+    if (error instanceof HTTPException) {
+      return c.json({ success: false, message: error.message }, error.status);
+    }
+    return c.json({ 
+      success: false, 
+      message: error instanceof Error ? error.message : 'Internal server error' 
+    }, 500);
+  }
+});
+
+// Verify payment status - POST endpoint
+paymentRouter.post('/verify', async (c) => {
+  try {
+    const body = await c.req.json();
+    if (!body.orderId) {
+      throw new HTTPException(400, { message: 'Order ID is required' });
+    }
+    return await verifyPayment(c, body.orderId);
+  } catch (error) {
+    console.error('Payment verification error:', error);
+    if (error instanceof HTTPException) {
+      return c.json({ success: false, message: error.message }, error.status);
+    }
+    return c.json({ 
+      success: false, 
+      message: error instanceof Error ? error.message : 'Internal server error' 
+    }, 500);
+  }
+});
+
+// Helper function to verify payment
+async function verifyPayment(c: any, orderId: string) {
+  const db = createDbClient(c.env.DB);
+  const cashfree = c.env.Cashfree;
+
+  // Get existing payment record
+  const [existingPayment] = await db.select()
+    .from(payments)
+    .where(eq(payments.orderId, orderId));
+
+  if (!existingPayment) {
+    throw new HTTPException(404, { message: 'Payment record not found' });
+  }
+
+  // Get order details from Cashfree
+  const paymentData = await cashfree.verifyOrder(orderId);
+  console.log('Payment verification response:', paymentData);
+
+  // Update payment status
+  await db.update(payments)
+    .set({
+      status: paymentData.order_status,
+      paymentMethod: paymentData.payment_method,
+      paymentTime: paymentData.payment_time,
+      updatedAt: new Date().toISOString()
+    })
+    .where(eq(payments.orderId, orderId));
+
+  // Update booking status if payment is successful
+  if (paymentData.order_status === 'PAID') {
+    await db.update(bookings)
+      .set({ 
+        status: 'confirmed',
+        paymentStatus: 'completed',
+        updatedAt: new Date()
+      })
+      .where(eq(bookings.paymentId, orderId));
+  }
+
+  return c.json({
+    success: true,
+    status: paymentData.order_status,
+    order_id: paymentData.order_id,
+    payment_details: {
+      method: paymentData.payment_method,
+      time: paymentData.payment_time,
+      amount: existingPayment.amount,
+      currency: existingPayment.currency
+    }
+  });
+}
 
 export default paymentRouter; 
